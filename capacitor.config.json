@@ -1,0 +1,11 @@
+{
+  "appId": "com.aeroaviso.app",
+  "appName": "AeroAviso",
+  "webDir": "www",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_aeroaviso",
+      "iconColor": "#F5C400"
+    }
+  }
+}

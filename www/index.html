@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AeroAviso</title>
+<meta name="theme-color" content="#14171c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: barra tipo señalética de aeropuerto (negro + amarillo), tablero de estado, lista de alertas en una columna */
+:root{
+  --bg:#eceff2; --surface:#ffffff; --surface-2:#f5f7f9; --line:#d3d8de;
+  --text:#14171c; --muted:#56606c;
+  --sign:#f5c400; --sign-ink:#14171c; --hdr:#14171c;
+  --over:#c22a2a; --over-bg:#fde9e8; --soon:#a35f00; --soon-bg:#fff2d6;
+  --ok:#1b7445; --ok-bg:#e3f4ea; --done:#6b7480; --link:#0b4f8a;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1216; --surface:#181c22; --surface-2:#1f242b; --line:#2c333c;
+  --text:#e8eaed; --muted:#9ba5b0; --over:#ff7b72; --over-bg:#3a1a1a; --soon:#f2b04a; --soon-bg:#3a2a10;
+  --ok:#55c98f; --ok-bg:#12301f; --done:#8a939e; --link:#7fb6ee; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1216; --surface:#181c22; --surface-2:#1f242b; --line:#2c333c;
+  --text:#e8eaed; --muted:#9ba5b0; --over:#ff7b72; --over-bg:#3a1a1a; --soon:#f2b04a; --soon-bg:#3a2a10;
+  --ok:#55c98f; --ok-bg:#12301f; --done:#8a939e; --link:#7fb6ee; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--f-body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--sign);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Cabecera */
+header{background:var(--hdr);color:#fff;position:sticky;top:0;z-index:20}
+header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{background:var(--sign);color:var(--sign-ink);font:700 22px/1 var(--f-display);padding:6px 9px;border-radius:3px;letter-spacing:.02em}
+.brand h1{margin:0;font:700 26px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--sign)}
+.brand small{display:block;font:500 11px/1.2 var(--f-body);color:#b9c0c8;letter-spacing:.08em;text-transform:uppercase}
+.clocks{display:flex;gap:14px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.clock span{display:block;font:600 10px/1 var(--f-body);letter-spacing:.12em;color:#9aa3ad;text-transform:uppercase}
+.clock b{font-weight:500;font-size:17px;color:#fff}
+.clock.z b{color:var(--sign)}
+
+/* Permiso */
+.perm{margin-top:16px;border:2px solid var(--sign);background:var(--surface);border-radius:6px;padding:14px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.perm.ok{border-color:var(--ok)}
+.perm.bad{border-color:var(--over)}
+.perm-text{flex:1 1 260px;min-width:0}
+.perm-text strong{display:block;font:700 19px/1.2 var(--f-display);letter-spacing:.03em;text-transform:uppercase}
+.perm-text p{margin:4px 0 0;color:var(--muted);font-size:14px}
+
+/* Tablero */
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border-top:6px solid var(--c)}
+.tile .n{font:700 40px/1 var(--f-display);color:var(--c);font-variant-numeric:tabular-nums}
+.tile .l{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.t-over{--c:var(--over)} .t-soon{--c:var(--soon)} .t-ok{--c:var(--ok)}
+
+/* Pestañas */
+nav.tabs{display:flex;gap:6px;margin-top:18px;overflow-x:auto;padding-bottom:2px}
+nav.tabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px}
+nav.tabs button[aria-selected="true"]{background:var(--sign);border-color:var(--sign);color:var(--sign-ink)}
+section.panel{margin-top:14px;padding-bottom:40px}
+
+/* Filtros */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+/* Alertas */
+.list{display:flex;flex-direction:column;gap:10px}
+.alert{background:var(--surface);border:1px solid var(--line);border-left:7px solid var(--c,var(--line));border-radius:6px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:6px 14px}
+.alert.over{--c:var(--over);background:linear-gradient(90deg,var(--over-bg),var(--surface) 55%)}
+.alert.soon{--c:var(--soon)}
+.alert.ok{--c:var(--ok)}
+.alert.done{--c:var(--done);opacity:.72}
+.a-main{min-width:0}
+.a-top{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:3px}
+.cat{font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.badge{font:700 12px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--c);color:#fff}
+.alert.soon .badge{color:#1b1200}
+.sample{font-size:11px;border:1px dashed var(--muted);color:var(--muted);border-radius:3px;padding:1px 6px}
+.a-title{font-weight:600;font-size:16px;line-height:1.3;margin:0;overflow-wrap:anywhere}
+.a-meta{color:var(--muted);font-size:13px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.a-meta b{color:var(--text);font-weight:500}
+.a-notes{font-size:13px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.a-side{text-align:right;min-width:0}
+.cd{font:500 15px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--c);white-space:nowrap}
+.due{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap}
+.a-actions{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:4px;padding:6px 11px;cursor:pointer;font-size:13px;font-weight:500;text-decoration:none;color:var(--text);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--sign);border-color:var(--sign);color:var(--sign-ink);font-weight:600}
+.btn.big{padding:10px 18px;font-size:15px}
+.btn.danger{color:var(--over)}
+.btn.good{background:var(--ok);border-color:var(--ok);color:#fff}
+.cal-box{grid-column:1/-1;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:10px;font-size:13px;display:flex;flex-direction:column;gap:8px}
+.cal-box p{margin:0;color:var(--muted)}
+.cal-box div{display:flex;gap:6px;flex-wrap:wrap}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:6px;padding:22px;text-align:center;color:var(--muted)}
+
+/* Formularios */
+form.card,.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.full{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+input,select,textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:4px;padding:9px 10px;font-weight:400;font-size:15px;width:100%;min-width:0}
+textarea{min-height:64px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{font-size:12px;color:var(--muted);font-weight:400}
+h2{font:700 22px/1.1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 14px;font-size:14px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Historial */
+.log{display:flex;flex-direction:column}
+.log-item{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.log-item time{font:500 12px/1.4 var(--f-mono);color:var(--muted);white-space:nowrap}
+.log-item b{font-weight:600}
+.log-item p{margin:0;grid-column:2;color:var(--muted);font-size:13px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c,var(--muted));margin-right:6px;vertical-align:middle}
+
+/* Toast */
+.toasts{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(380px,calc(100vw - 24px))}
+.toast{background:var(--hdr);color:#fff;border-left:6px solid var(--c,var(--sign));border-radius:5px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.3);animation:in .25s ease-out}
+.toast b{display:block;font:700 16px/1.2 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--c,var(--sign))}
+.toast span{font-size:13px;color:#d6dbe0}
+@keyframes in{from{transform:translateY(12px);opacity:.3}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+
+.phone-card{border:2px solid var(--sign)}
+.phone-card.on{border-color:var(--ok)}
+.switch{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);cursor:pointer;color:var(--text);font-size:16px;font-weight:600;flex-direction:row}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .knob{flex:0 0 auto;width:52px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
+.switch .knob::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.switch input:checked + .knob{background:var(--ok)}
+.switch input:checked + .knob::after{transform:translateX(22px)}
+.switch input:focus-visible + .knob{outline:3px solid var(--sign);outline-offset:2px}
+.code{font:500 20px/1.2 var(--f-mono);letter-spacing:.04em;background:var(--hdr);color:var(--sign);padding:8px 12px;border-radius:4px;user-select:all;overflow-wrap:anywhere}
+.howto{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+.howto li{padding-left:4px}
+.howto b{color:var(--text)}
+.stepbtn{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);text-decoration:none;color:var(--text);cursor:pointer;width:100%;text-align:left;font-size:15px}
+.stepbtn .num{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--sign);color:var(--sign-ink);display:grid;place-items:center;font:700 18px/1 var(--f-display)}
+.stepbtn.doneStep .num{background:var(--ok);color:#fff}
+.stepbtn > span > b{display:block}
+.stepbtn small b{display:inline}
+#phoneCard{scroll-margin-top:120px}
+.stepbtn small{display:block;color:var(--muted);font-size:13px}
+.stepbtn:hover{border-color:var(--muted)}
+.steplist{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.srows{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.srow{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--surface-2);font-size:14px}
+.srow + .srow{border-top:1px solid var(--line)}
+.pstat{font-size:13px;padding:8px 10px;border-radius:4px;background:var(--surface-2)}
+.steps{margin:6px 0 0;padding-left:20px;color:var(--muted);font-size:14px}
+.steps li{margin-bottom:4px}
+.ok-text{color:var(--ok);font-weight:600}
+.bad-text{color:var(--over);font-weight:600}
+
+@media (max-width:620px){
+  .grid{grid-template-columns:1fr}
+  .alert{grid-template-columns:1fr}
+  .a-side{text-align:left;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .tile .n{font-size:32px}
+  .tile{padding:10px}
+  .tile .l{font-size:11px}
+  .clocks{gap:10px}
+  .clock b{font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">✈</div>
+      <div><h1>AeroAviso</h1><small>Alertas de vencimientos aeronáuticos</small></div>
+    </div>
+    <div class="clocks">
+      <div class="clock"><span>Hora local RD</span><b id="clkLocal">--:--:--</b></div>
+      <div class="clock z"><span>UTC (Zulu)</span><b id="clkUtc">--:--:--Z</b></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="perm" class="perm" role="region" aria-label="Permiso de notificaciones"></div>
+
+  <div class="board" aria-label="Resumen">
+    <div class="tile t-over"><span class="n" id="nOver">0</span><span class="l">Vencidas</span></div>
+    <div class="tile t-soon"><span class="n" id="nSoon">0</span><span class="l">Por vencer</span></div>
+    <div class="tile t-ok"><span class="n" id="nOk">0</span><span class="l">Al día</span></div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="alertas" aria-selected="true">Alertas</button>
+    <button role="tab" data-tab="nueva" aria-selected="false">+ Nueva alerta</button>
+    <button role="tab" data-tab="reportar" aria-selected="false">⚠ Reportar problema</button>
+    <button role="tab" data-tab="equipos" aria-selected="false">Equipos en operación</button>
+    <button role="tab" data-tab="historial" aria-selected="false">Historial</button>
+    <button role="tab" data-tab="ajustes" aria-selected="false">⚙ Configuración</button>
+  </nav>
+
+  <!-- ALERTAS -->
+  <section class="panel" id="tab-alertas">
+    <div class="filters" id="filters"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <!-- NUEVA -->
+  <section class="panel" id="tab-nueva" hidden>
+    <form class="card" id="formNew" autocomplete="off">
+      <h2>Nueva alerta</h2>
+      <p class="sub">Pon la hora límite. Te aviso antes, te aviso al vencer y te sigo avisando mientras siga pendiente.</p>
+      <div class="presets" style="margin-bottom:14px" id="tpl"></div>
+      <div class="grid">
+        <label class="full">Qué hay que hacer
+          <input id="fTitle" required maxlength="140" placeholder="Ej.: Pago de tasa de aterrizaje — HI1050">
+        </label>
+        <label>Categoría
+          <select id="fCat"></select>
+        </label>
+        <label>Responsable
+          <input id="fWho" maxlength="60" placeholder="Ej.: Contabilidad / Despacho">
+        </label>
+        <label>Fecha y hora límite
+          <input id="fDue" type="datetime-local" required>
+          <span class="presets" style="margin-top:4px">
+            <button type="button" class="chip" data-in="5">En 5 min</button>
+            <button type="button" class="chip" data-in="15">En 15 min</button>
+            <button type="button" class="chip" data-in="60">En 1 h</button>
+            <button type="button" class="chip" data-in="tomorrow">Mañana 8:00 a. m.</button>
+          </span>
+        </label>
+        <label>Avisarme antes
+          <select id="fLead">
+            <option value="0">Solo cuando venza</option>
+            <option value="2">2 minutos antes</option>
+            <option value="10">10 minutos antes</option>
+            <option value="30">30 minutos antes</option>
+            <option value="60" selected>1 hora antes</option>
+            <option value="240">4 horas antes</option>
+            <option value="1440">1 día antes</option>
+            <option value="4320">3 días antes</option>
+            <option value="10080">7 días antes</option>
+            <option value="43200">30 días antes</option>
+          </select>
+        </label>
+        <label>Se repite
+          <select id="fRep">
+            <option value="none">No se repite</option>
+            <option value="daily">Cada día</option>
+            <option value="weekly">Cada semana</option>
+            <option value="monthly">Cada mes</option>
+            <option value="yearly">Cada año</option>
+          </select>
+        </label>
+        <label>Monto a pagar (opcional)
+          <div class="row" style="flex-wrap:nowrap">
+            <select id="fCur" style="width:auto"><option>US$</option><option>RD$</option></select>
+            <input id="fAmt" type="number" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </label>
+        <label class="full">Notas
+          <textarea id="fNotes" maxlength="400" placeholder="Ej.: Pagar en la ventanilla de IDAC o por transferencia. Guardar el recibo."></textarea>
+        </label>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary big" type="submit">Guardar alerta</button>
+        <span class="hint" id="formMsg"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- REPORTAR -->
+  <section class="panel" id="tab-reportar" hidden>
+    <form class="card" id="formRep" autocomplete="off">
+      <h2>Reportar un problema</h2>
+      <p class="sub">Si algo falta, está mal o no se hizo a tiempo, repórtalo aquí. Sale el aviso enseguida y se repite hasta que alguien lo marque como resuelto.</p>
+      <div class="grid">
+        <label>Tipo de problema
+          <select id="rType">
+            <option value="Falta">Falta algo</option>
+            <option value="Está mal">Está mal o dañado</option>
+            <option value="No se hizo a tiempo">No se hizo a tiempo</option>
+            <option value="Riesgo de seguridad">Riesgo de seguridad</option>
+          </select>
+        </label>
+        <label>Área
+          <select id="rArea">
+            <option>Plataforma / rampa</option>
+            <option>Pista y calles de rodaje</option>
+            <option>Terminal de pasajeros</option>
+            <option>Combustible</option>
+            <option>Mantenimiento de aeronaves</option>
+            <option>Seguridad (AVSEC)</option>
+            <option>Documentación y pagos</option>
+          </select>
+        </label>
+        <label class="full">Qué pasa
+          <input id="rWhat" required maxlength="140" placeholder="Ej.: Falta extintor en la puerta 4">
+        </label>
+        <label>Quién lo debe resolver
+          <input id="rWho" maxlength="60" placeholder="Ej.: Supervisor de rampa">
+        </label>
+        <label>Urgencia
+          <select id="rUrg">
+            <option value="5">Alta — avisar cada 5 min</option>
+            <option value="15">Media — avisar cada 15 min</option>
+            <option value="30" selected>Normal — avisar cada 30 min</option>
+          </select>
+        </label>
+        <label class="full">Detalles
+          <textarea id="rNotes" maxlength="400" placeholder="Ej.: Se detectó en la ronda de las 7:00 p. m. El vuelo sale a las 8:30 p. m."></textarea>
+        </label>
+      </div>
+      <div class="presets" style="margin-top:12px" id="rTpl"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary big" type="submit">Reportar y avisar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- EQUIPOS -->
+  <section class="panel" id="tab-equipos" hidden>
+    <form class="card" id="formEq" autocomplete="off">
+      <h2>Registrar encendido</h2>
+      <p class="sub">Para equipos que no pueden quedarse operando más del tiempo permitido. Se calcula la hora de apagado y te avisa si se pasa.</p>
+      <div class="grid">
+        <label>Equipo
+          <select id="eEq">
+            <option value="Planta eléctrica de tierra (GPU)|60">Planta eléctrica de tierra (GPU)</option>
+            <option value="Aire acondicionado preacondicionado (PCA)|45">Aire acondicionado preacondicionado (PCA)</option>
+            <option value="APU de la aeronave en plataforma|30">APU de la aeronave en plataforma</option>
+            <option value="Bomba de combustible / hidrante|40">Bomba de combustible / hidrante</option>
+            <option value="Luces de pista (balizamiento) fuera de horario|60">Luces de pista fuera de horario</option>
+            <option value="Bomba sumergible de cisterna|420">Bomba sumergible de cisterna</option>
+            <option value="Otro equipo|60">Otro equipo</option>
+          </select>
+        </label>
+        <label>Aeronave / posición
+          <input id="ePos" maxlength="40" placeholder="Ej.: HI1050 · Puerta 4">
+        </label>
+        <label>Tiempo máximo encendido
+          <div class="row" style="flex-wrap:nowrap">
+            <input id="eH" type="number" min="0" max="48" value="1" aria-label="Horas"><span class="hint">h</span>
+            <input id="eM" type="number" min="0" max="59" value="0" aria-label="Minutos"><span class="hint">min</span>
+          </div>
+        </label>
+        <label>Responsable
+          <input id="eWho" maxlength="60" placeholder="Ej.: Técnico de rampa">
+        </label>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary big" type="submit">Registrar encendido ahora</button>
+      </div>
+    </form>
+    <h2 style="margin-top:22px">Equipos encendidos</h2>
+    <div class="list" id="eqList" style="margin-top:10px"></div>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section class="panel" id="tab-historial" hidden>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>Historial de avisos</h2>
+        <button class="btn" id="clearLog" type="button">Vaciar historial</button>
+      </div>
+      <p class="sub">Cada aviso enviado y cada tarea cumplida queda registrada con su hora.</p>
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section class="panel" id="tab-ajustes" hidden>
+    <div class="card phone-card" id="phoneCard"></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:14px;margin-top:14px">
+      <h2>Otras opciones</h2>
+      <label>Si una alerta sigue vencida, repetir el aviso cada
+        <select id="sEvery">
+          <option value="5">5 minutos</option>
+          <option value="15">15 minutos</option>
+          <option value="30">30 minutos</option>
+          <option value="60">1 hora</option>
+        </select>
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--text);font-weight:500">
+        <input type="checkbox" id="sSound" style="width:auto"> Sonido y vibración con cada aviso
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--text);font-weight:500">
+        <input type="checkbox" id="sWake" style="width:auto"> Mantener la pantalla encendida (turno de operaciones)
+      </label>
+      <div class="row">
+        <button class="btn" id="testBtn" type="button">Enviar aviso de prueba</button>
+        <button class="btn" id="delSamples" type="button">Borrar alertas de ejemplo</button>
+      </div>
+      <div>
+        <strong>Respaldo</strong>
+        <p class="hint" style="margin:2px 0 8px">Los datos se guardan en este navegador. Descarga un respaldo para pasarlos a otro equipo.</p>
+        <div class="row">
+          <button class="btn" id="expBtn" type="button">Descargar respaldo</button>
+          <label class="btn" style="flex-direction:row;color:var(--text);font-size:13px">Cargar respaldo
+            <input type="file" id="impFile" accept="application/json,.json" hidden>
+          </label>
+        </div>
+      </div>
+      <div>
+        <strong>Cómo llegan los avisos</strong>
+        <ul class="steps">
+          <li>En la app de Android cada alerta queda programada en el teléfono y llega a su hora aunque AeroAviso esté cerrada.</li>
+          <li>En la computadora llegan al centro de notificaciones mientras AeroAviso esté abierta o minimizada.</li>
+          <li>Con AeroAviso abierta también ves el aviso en pantalla, con sonido.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+<script src="capacitor.js"></script>
+
+<script>
+(function(){
+"use strict";
+const KEY = "aeroaviso.v1";
+const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+const CATS = {
+  pagos:{n:"Pagos y tasas"},
+  licencias:{n:"Licencias y certificados"},
+  mant:{n:"Mantenimiento"},
+  ops:{n:"Operaciones"},
+  avsec:{n:"Seguridad (AVSEC)"},
+  equipos:{n:"Equipos en operación"},
+  reportes:{n:"Problemas reportados"}
+};
+const REP_TPL = [
+  ["Falta","Plataforma / rampa","Falta extintor en la posición de la aeronave"],
+  ["Falta","Plataforma / rampa","Faltan calzos en la aeronave estacionada"],
+  ["Está mal","Pista y calles de rodaje","Luz de borde de pista apagada"],
+  ["Riesgo de seguridad","Pista y calles de rodaje","Objeto extraño (FOD) en la calle de rodaje"],
+  ["Está mal","Combustible","Fuga de combustible en plataforma"],
+  ["No se hizo a tiempo","Documentación y pagos","No se pagó la tasa de aterrizaje"],
+  ["Falta","Documentación y pagos","Falta documento de la aeronave a bordo"],
+  ["Está mal","Terminal de pasajeros","Puerta de seguridad no cierra"]
+];
+const TEMPLATES = [
+  {t:"Pago de tasa de aterrizaje y estacionamiento", c:"pagos", lead:1440, rep:"monthly", who:"Contabilidad"},
+  {t:"Pago de servicio de navegación aérea (IDAC)", c:"pagos", lead:4320, rep:"monthly", who:"Contabilidad"},
+  {t:"Cierre del plan de vuelo", c:"ops", lead:30, rep:"none", who:"Despacho", notes:"Si no se cierra a tiempo, los servicios ATS inician la fase de alerta (SAR)."},
+  {t:"Renovación de certificado médico", c:"licencias", lead:43200, rep:"none", who:"Tripulación"},
+  {t:"Renovación de licencia / habilitación", c:"licencias", lead:43200, rep:"none", who:"Recursos Humanos"},
+  {t:"Inspección de mantenimiento programada", c:"mant", lead:1440, rep:"none", who:"Mantenimiento"},
+  {t:"Inspección de pista por FOD", c:"avsec", lead:30, rep:"daily", who:"Operaciones de plataforma"},
+  {t:"Vencimiento de seguro de la aeronave", c:"pagos", lead:43200, rep:"yearly", who:"Administración"}
+];
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtTime = t => new Date(t).toLocaleTimeString("es-DO",{hour:"numeric",minute:"2-digit"});
+const fmtDate = t => new Date(t).toLocaleDateString("es-DO",{weekday:"short",day:"numeric",month:"short"});
+const fmtFull = t => fmtDate(t) + " · " + fmtTime(t);
+const pad = n => String(n).padStart(2,"0");
+function fmtDur(ms){
+  ms = Math.abs(ms);
+  const d = Math.floor(ms/DAY), h = Math.floor(ms%DAY/HOUR), m = Math.floor(ms%HOUR/MIN), s = Math.floor(ms%MIN/1000);
+  if (d >= 1) return d + " d " + h + " h";
+  if (h >= 1) return h + " h " + pad(m) + " min";
+  return m + " min " + pad(s) + " s";
+}
+function money(a){ return a.amount ? a.currency + " " + Number(a.amount).toLocaleString("es-DO",{minimumFractionDigits:2,maximumFractionDigits:2}) : ""; }
+function toLocalInput(t){ const d=new Date(t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); }
+function leadText(m){ return m>=1440 ? (m/1440)+" día(s) antes" : m>=60 ? (m/60)+" h antes" : m+" min antes"; }
+
+/* ---------- datos ---------- */
+function newAlert(o){
+  return Object.assign({id:uid(), title:"", cat:"ops", who:"", due:Date.now()+HOUR, lead:60, rep:"none",
+    amount:"", currency:"US$", notes:"", done:false, doneAt:0, kind:"deadline", start:0, sample:false,
+    n:{pre:false, due:false, last:0}, snooze:0, created:Date.now()}, o);
+}
+function seed(){
+  const now = Date.now();
+  return {
+    settings:{every:30, sound:true, wake:false},
+    log:[{t:now, title:"AeroAviso listo", body:"Se cargaron alertas de ejemplo. Puedes borrarlas en Ajustes.", lvl:"ok"}],
+    alerts:[
+      newAlert({sample:true, title:"Pago de tasa de aterrizaje y estacionamiento — HI1050", cat:"pagos", who:"Contabilidad", due:now-40*MIN, lead:1440, rep:"monthly", amount:"385", currency:"US$", notes:"Factura del aeropuerto MDSD. Guardar el comprobante.", n:{pre:true,due:false,last:0}}),
+      newAlert({sample:true, title:"Cierre del plan de vuelo MDSD → MDPC", cat:"ops", who:"Despacho", due:now+25*MIN, lead:30, notes:"Si no se cierra a tiempo, los servicios ATS inician la fase de alerta (SAR)."}),
+      newAlert({sample:true, kind:"timer", title:"Planta eléctrica de tierra (GPU) — HI1050 · Puerta 4", cat:"equipos", who:"Técnico de rampa", start:now-20*MIN, due:now+40*MIN, lead:10, n:{pre:false,due:false,last:0}}),
+      newAlert({sample:true, title:"Inspección de pista por FOD — Pista 17/35", cat:"avsec", who:"Operaciones de plataforma", due:now+4*HOUR, lead:30, rep:"daily"}),
+      newAlert({sample:true, title:"Inspección A-check — Embraer HI1050", cat:"mant", who:"Mantenimiento", due:now+3*DAY, lead:1440}),
+      newAlert({sample:true, title:"Renovación de certificado médico Clase 1 — Cap. R. Peña", cat:"licencias", who:"Tripulación", due:now+6*DAY, lead:10080, n:{pre:true,due:false,last:0}}),
+      newAlert({sample:true, title:"Pago de servicio de navegación aérea (IDAC)", cat:"pagos", who:"Contabilidad", due:now+12*DAY, lead:4320, rep:"monthly", amount:"18,500".replace(",",""), currency:"RD$"})
+    ]
+  };
+}
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if(raw){ const s = JSON.parse(raw); if(s && Array.isArray(s.alerts)) return s; } }catch(e){}
+  return null;
+}
+let state = load() || seed();
+state.settings = Object.assign({every:30, sound:true, wake:false}, state.settings||{});
+if (!state.settings.push || !state.settings.push.topic) state.settings.push = {on:false, topic:makeTopic(), lastOk:0, lastErr:""};
+function makeTopic(){
+  const abc = "abcdefghjkmnpqrstuvwxyz23456789"; let t = "aeroaviso-";
+  try{ const r = new Uint8Array(8); crypto.getRandomValues(r); r.forEach(b=>t+=abc[b%abc.length]); }
+  catch(e){ for(let i=0;i<8;i++) t+=abc[Math.floor(Math.random()*abc.length)]; }
+  return t;
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+save();
+
+function status(a, now){
+  now = now || Date.now();
+  if (a.done) return "done";
+  if (now >= a.due) return "over";
+  if (a.due - now <= Math.max(a.lead*MIN, a.kind==="timer" ? 0 : DAY)) return "soon";
+  return "ok";
+}
+const LABEL = {over:"Vencida", soon:"Por vencer", ok:"Al día", done:"Cumplida"};
+
+function nextDue(t, rep){
+  const d = new Date(t);
+  if (rep==="daily") d.setDate(d.getDate()+1);
+  else if (rep==="weekly") d.setDate(d.getDate()+7);
+  else if (rep==="monthly") d.setMonth(d.getMonth()+1);
+  else if (rep==="yearly") d.setFullYear(d.getFullYear()+1);
+  return d.getTime();
+}
+
+/* ---------- notificaciones ---------- */
+let ICON = "";
+try{
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d");
+  x.fillStyle = "#f5c400"; x.fillRect(0,0,128,128);
+  x.fillStyle = "#14171c"; x.font = "bold 84px sans-serif"; x.textAlign="center"; x.textBaseline="middle";
+  x.fillText("✈",64,70);
+  ICON = c.toDataURL("image/png");
+}catch(e){}
+
+let sysFailed = false;
+const supported = "Notification" in window;
+
+async function sysNotify(title, body, tag, urgent){
+  if (!supported || Notification.permission !== "granted" || !(state.settings.notif && state.settings.notif.on)) return false;
+  try{
+    if ("serviceWorker" in navigator){
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg){ await reg.showNotification(title,{body, tag, icon:ICON, badge:ICON, requireInteraction:!!urgent, renotify:true}); return true; }
+    }
+  }catch(e){}
+  try{
+    const n = new Notification(title,{body, tag, icon:ICON, requireInteraction:!!urgent, renotify:true});
+    n.onclick = () => { window.focus(); n.close(); };
+    return true;
+  }catch(e){
+    if (!sysFailed){ sysFailed = true; renderPerm(); }
+    return false;
+  }
+}
+
+let audioCtx = null;
+function beep(lvl){
+  if (!state.settings.sound) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const tones = lvl==="over" ? [880,660,880] : [740,988];
+    tones.forEach((f,i)=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type="square"; o.frequency.value=f; o.connect(g); g.connect(audioCtx.destination);
+      const t0 = audioCtx.currentTime + i*0.22;
+      g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.12,t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.18);
+      o.start(t0); o.stop(t0+0.2);
+    });
+  }catch(e){}
+  try{ navigator.vibrate && navigator.vibrate(lvl==="over"?[300,120,300,120,300]:[200,100,200]); }catch(e){}
+}
+
+function toast(title, body, lvl){
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.style.setProperty("--c", lvl==="over" ? "#ff7b72" : lvl==="soon" ? "#f5c400" : "#55c98f");
+  el.innerHTML = "<b>"+esc(title)+"</b><span>"+esc(body)+"</span>";
+  $("#toasts").appendChild(el);
+  setTimeout(()=>el.remove(), lvl==="over" ? 12000 : 7000);
+}
+
+function addLog(title, body, lvl){
+  state.log.unshift({t:Date.now(), title, body, lvl});
+  state.log = state.log.slice(0,300);
+}
+
+function notify(title, body, lvl, tag, a, key){
+  addLog(title, body, lvl);
+  phoneLive(title, body, lvl, tag, a, key);
+  toast(title, body, lvl);
+  beep(lvl);
+  sysNotify(title, body, tag, lvl==="over");
+  save();
+  if (!$("#tab-historial").hidden) renderLog();
+}
+
+function overdueMsg(a){
+  if (a.kind==="report") return a.area + ". Reportado a las " + fmtTime(a.due) + (a.who ? " Lo debe resolver: "+a.who+"." : "") + " Márcalo como resuelto cuando se arregle.";
+  if (a.kind==="timer") return "Tiempo máximo cumplido. Apaga o desconecta el equipo y registra el apagado." + (a.who ? " Responsable: "+a.who+"." : "");
+  if (a.cat==="pagos") return "Se pasó la fecha de pago. Hay que pagarla ya" + (a.amount ? ": "+money(a) : "") + "." + (a.who ? " Responsable: "+a.who+"." : "");
+  return "Se pasó la hora límite (" + fmtTime(a.due) + "). Márcala como cumplida cuando se haga." + (a.who ? " Responsable: "+a.who+"." : "");
+}
+
+/* ---------- motor de revisión ---------- */
+function check(){
+  const now = Date.now(), every = state.settings.every*MIN;
+  let changed = false;
+  for (const a of state.alerts){
+    if (a.done) continue;
+    a.n = a.n || {pre:false,due:false,last:0};
+    if (!a.n.pre && now < a.due && now >= a.due - a.lead*MIN){
+      a.n.pre = true; changed = true;
+      const what = a.kind==="timer" ? "Apagar a las " + fmtTime(a.due) : "Vence " + fmtFull(a.due);
+      notify("Por vencer: " + a.title, what + " (en " + fmtDur(a.due-now) + ")." + (a.amount ? " Monto: "+money(a)+"." : ""), "soon", a.id+"-pre", a, "pre");
+    }
+    if (now >= a.due){
+      if (!a.n.due){
+        a.n.due = true; a.n.last = now; a.n.pre = true; changed = true;
+        notify((a.kind==="timer" ? "Apagar ya: " : a.kind==="report" ? a.rtype.toUpperCase()+": " : "VENCIDA: ") + a.title, overdueMsg(a), "over", a.id+"-due", a, "due");
+      } else if (!a.norep && now - a.n.last >= (a.every ? a.every*MIN : every) && !(a.snooze > now)){
+        a.n.last = now; changed = true;
+        notify("Sigue sin resolver: " + a.title, (a.kind==="report" ? "Reportado hace " : "Vencida hace ") + fmtDur(now-a.due) + ". " + overdueMsg(a), "over", a.id+"-due", a, "r");
+      }
+    }
+  }
+  if (changed) save();
+  const sig = state.alerts.map(a=>a.id+status(a,now)).join();
+  if (sig !== lastSig) renderAll();
+}
+let lastSig = "";
+
+/* ---------- notificaciones del dispositivo ---------- */
+/* En la app de Android: notificaciones locales del sistema, programadas con alarma exacta (llegan con la app cerrada).
+   En la laptop (navegador): notificaciones del sistema mientras AeroAviso esté abierta o minimizada. */
+const CAP = window.Capacitor;
+const NATIVE = !!(CAP && typeof CAP.isNativePlatform==="function" && CAP.isNativePlatform());
+function plug(name){ try{ if (window.capacitorExports) return window.capacitorExports.registerPlugin(name); }catch(e){} return CAP && CAP.Plugins ? CAP.Plugins[name] : null; }
+const LN = NATIVE ? plug("LocalNotifications") : null;
+const NSET = NATIVE ? plug("NativeSettings") : null;
+const APK_URL = "__APK_URL__";
+const isAndroidUA = /android/i.test(navigator.userAgent);
+state.settings.notif = Object.assign({on:false, lastErr:""}, state.settings.notif||{});
+delete state.settings.push;
+const N = () => state.settings.notif;
+let permState = "unknown", exactState = "granted";
+
+async function refreshPerm(){
+  if (NATIVE && LN){
+    try{ permState = (await LN.checkPermissions()).display; }catch(e){ permState = "unknown"; }
+    try{ exactState = (await LN.checkExactNotificationSetting()).exact_alarm; }catch(e){ exactState = "granted"; }
+  } else permState = supported ? Notification.permission : "unsupported";
+  renderPhone(); renderPerm();
+}
+const phoneOn = () => NATIVE && N().on && permState==="granted";
+const notifActive = () => N().on && permState==="granted";
+
+function nid(a, k){ let h = 2166136261; const s2 = a.id+"|"+k; for (let i=0;i<s2.length;i++){ h ^= s2.charCodeAt(i); h = Math.imul(h, 16777619); } return (h>>>0) % 2000000000 + 1; }
+async function ensureChannel(){
+  if (!LN) return;
+  try{ await LN.createChannel({id:"alertas", name:"Alertas de AeroAviso", description:"Vencimientos, pagos, equipos y problemas reportados", importance:5, visibility:1, vibration:true, lights:true, lightColor:"#F5C400"}); }catch(e){}
+}
+function lnNotif(id, title, body, at){
+  const n = {id, title, body, largeBody: body, channelId:"alertas", smallIcon:"ic_stat_aeroaviso", iconColor:"#F5C400", autoCancel:true};
+  if (at) n.schedule = {at: new Date(at), allowWhileIdle: true};
+  return n;
+}
+let lnQ = Promise.resolve();
+function lnRun(fn){
+  lnQ = lnQ.then(fn).then(()=>{ if (N().lastErr){ N().lastErr=""; save(); renderPhone(); } })
+    .catch(e=>{ N().lastErr = "El teléfono no aceptó programar el aviso: " + (e && e.message ? e.message : e); save(); renderPhone(); });
+  return lnQ;
+}
+function lnSchedule(list){ if (LN && list.length) lnRun(()=>LN.schedule({notifications:list})); }
+function lnCancel(ids){ if (LN && ids.length) lnRun(()=>LN.cancel({notifications:ids.map(id=>({id}))})); }
+
+function phonePlan(a){
+  const out = [];
+  if (a.done || a.sample) return out;
+  const every = (a.every || state.settings.every) * MIN;
+  if (a.kind !== "report"){
+    if (a.lead > 0){
+      const t = a.due - a.lead*MIN;
+      out.push(["pre", t, "Por vencer: "+a.title, (a.kind==="timer" ? "Apagar a las "+fmtTime(a.due) : "Vence "+fmtFull(a.due))+" (en "+fmtDur(a.due-t)+")."+(a.amount?" Monto: "+money(a)+".":"")+(a.who?" Responsable: "+a.who+".":"")]);
+    }
+    out.push(["due", a.due, (a.kind==="timer"?"Apagar ya: ":"VENCIDA: ")+a.title, overdueMsg(a)]);
+  }
+  const reps = a.norep ? 0 : a.kind==="report" ? 12 : 8;
+  for (let k=1; k<=reps; k++){
+    const t = a.due + k*every;
+    if (a.snooze && t < a.snooze) continue;
+    out.push(["r"+k, t, "Sigue sin resolver: "+a.title, "Aviso número "+(k+1)+". "+overdueMsg(a)]);
+  }
+  return out;
+}
+function syncPhone(a){
+  if (!phoneOn()) return;
+  a.nat = a.nat || {};
+  const now = Date.now(), want = {}, add = [], del = [];
+  phonePlan(a).forEach(d=>{ if (d[1] > now + 3000) want[d[0]] = d; });
+  Object.keys(a.nat).forEach(k=>{ if (!want[k] && a.nat[k] > now){ del.push(nid(a,k)); delete a.nat[k]; } });
+  Object.keys(want).forEach(k=>{ const d = want[k]; if (a.nat[k] !== d[1]){ add.push(lnNotif(nid(a,k), d[2], d[3], d[1])); a.nat[k] = d[1]; } });
+  lnCancel(del); lnSchedule(add);
+}
+function syncAllPhone(){ if (!phoneOn()) return; state.alerts.forEach(syncPhone); save(); }
+function phoneCancelAll(a){
+  if (a.nat && LN){ const now = Date.now(); lnCancel(Object.keys(a.nat).filter(k=>a.nat[k] > now).map(k=>nid(a,k))); }
+  a.nat = {};
+}
+function phoneResolved(a){
+  if (!phoneOn() || a.sample) return;
+  lnSchedule([lnNotif(nid(a,"due"), (a.kind==="report"?"Resuelto: ":a.kind==="timer"?"Apagado: ":"Cumplida: ")+a.title, "Registrado a las "+fmtTime(Date.now()))]);
+}
+/* aviso en vivo con la app abierta: solo si no estaba ya programado en el teléfono */
+function phoneLive(title, body, lvl, tag, a, key){
+  if (!phoneOn() || (a && a.sample)) return;
+  if (a && a.nat){
+    const now = Date.now();
+    const ev = (a.every||state.settings.every)*MIN;
+    const hit = key==="r" ? Object.keys(a.nat).some(k => k[0]==="r" && Math.abs(a.nat[k]-now) < ev) : (a.nat[key] !== undefined && a.nat[key] <= now + 3*MIN);
+    if (hit) return;
+  }
+  lnSchedule([lnNotif(a ? nid(a, key==="r" ? "live" : key) : (Math.floor(Math.random()*1e9)+1), title, body)]);
+}
+
+async function openNotifSettings(){
+  if (NATIVE && NSET){
+    try{ await NSET.openAndroid({option:"app_notification"}); return; }catch(e){}
+    try{ await NSET.openAndroid({option:"application_details"}); return; }catch(e){}
+  }
+  toast("Activa el permiso a mano", NATIVE ? "Ajustes → Aplicaciones → AeroAviso → Notificaciones → Permitir." : "Toca el candado junto a la dirección → Notificaciones → Permitir. En Windows: Configuración → Sistema → Notificaciones.", "soon");
+}
+
+async function enableNotif(){
+  N().on = true; N().lastErr = ""; save();
+  if (NATIVE && LN){
+    await ensureChannel();
+    let st = "denied";
+    try{ st = (await LN.requestPermissions()).display; }catch(e){}
+    permState = st;
+    if (st !== "granted"){
+      renderPhone(); renderPerm();
+      toast("Falta el permiso", "Se abren los Ajustes del teléfono: activa “Permitir notificaciones” y vuelve a AeroAviso.", "soon");
+      setTimeout(openNotifSettings, 1200);
+      return;
+    }
+    try{ exactState = (await LN.checkExactNotificationSetting()).exact_alarm; }catch(e){}
+    syncAllPhone();
+    lnSchedule([lnNotif(1, "AeroAviso activado", "Así te llegarán las alertas de vencimientos y problemas reportados.")]);
+  } else if (supported){
+    let st = Notification.permission;
+    if (st === "default"){ try{ st = await Notification.requestPermission(); }catch(e){} }
+    permState = st;
+    if (st === "granted") sysNotify("AeroAviso activado", "Así te llegarán las alertas en esta computadora.", "aeroaviso-on", false);
+    else toast("Permiso bloqueado", "Toca el candado junto a la dirección → Notificaciones → Permitir, y recarga.", "soon");
+  }
+  addLog("Notificaciones activadas", permState==="granted" ? "Permiso concedido en este dispositivo." : "Falta conceder el permiso.", permState==="granted" ? "ok" : "soon");
+  save(); renderPhone(); renderPerm(); renderLog();
+}
+function disableNotif(){
+  state.alerts.forEach(phoneCancelAll);
+  N().on = false; save();
+  addLog("Notificaciones desactivadas", "No se enviarán avisos a este dispositivo.", "soon");
+  renderPhone(); renderPerm(); renderLog();
+}
+function test1min(){
+  const a = newAlert({title:"Prueba de AeroAviso (1 minuto)", cat:"ops", due:Date.now()+60*1000, lead:0, norep:true, notes:"Alerta de prueba. Puedes eliminarla."});
+  state.alerts.push(a); syncPhone(a);
+  addLog("Prueba programada", "Vence a las "+fmtTime(a.due)+".", "ok");
+  save(); renderAll();
+  toast("Prueba para las "+fmtTime(a.due), NATIVE ? "Ya puedes cerrar AeroAviso y bloquear el teléfono. En 1 minuto te llega." : "Deja AeroAviso abierta o minimizada. En 1 minuto te llega.", "ok");
+}
+
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); installEvt = e; renderPhone(); });
+
+function statusRow(label, ok, okText, badText){
+  return '<div class="srow"><span>'+label+'</span><b class="'+(ok?'ok-text':'bad-text')+'">'+(ok?okText:badText)+'</b></div>';
+}
+function renderPhone(){
+  const el = $("#phoneCard"); if (!el) return;
+  const on = N().on, granted = permState==="granted";
+  el.classList.toggle("on", on && granted);
+  let h = '<h2>Notificaciones</h2>';
+  if (NATIVE){
+    h += '<p class="sub">AeroAviso te avisa en la barra de notificaciones del teléfono, aunque la app esté cerrada.</p>';
+    h += '<div class="srows">'+statusRow("Permiso del teléfono", granted, "Permitido", permState==="unknown"?"Sin revisar":"No permitido")+
+         statusRow("Avisos a la hora exacta", exactState==="granted", "Permitido", "No permitido")+'</div>';
+  } else {
+    h += '<p class="sub">En esta computadora los avisos salen en el centro de notificaciones de Windows o Mac mientras AeroAviso esté abierta (puede estar minimizada).</p>';
+    h += '<div class="srows">'+statusRow("Permiso del navegador", granted, "Permitido", permState==="denied"?"Bloqueado":permState==="unsupported"?"No disponible":"Sin activar")+'</div>';
+  }
+  h += '<label class="switch" style="margin-top:12px"><input type="checkbox" id="notifSw" '+(on?"checked":"")+'><span class="knob" aria-hidden="true"></span>'+(on?"Notificaciones de AeroAviso activadas":"Activar notificaciones de AeroAviso")+'</label>';
+  h += '<div class="row" style="margin-top:12px">';
+  if (NATIVE) h += '<button class="btn" type="button" id="openSet">Abrir ajustes de notificaciones</button>';
+  if (NATIVE && exactState!=="granted") h += '<button class="btn primary" type="button" id="exactBtn">Permitir avisos a la hora exacta</button>';
+  if (on && granted) h += '<button class="btn primary" type="button" id="test1">Probar en 1 minuto</button>';
+  if (!NATIVE && installEvt) h += '<button class="btn" type="button" id="installPwa">Instalar en esta computadora</button>';
+  h += '</div>';
+  if (on && !granted) h += '<p class="pstat bad-text" style="margin-top:10px">El permiso está apagado. '+(NATIVE?'Toca “Abrir ajustes de notificaciones”, activa <b>Permitir notificaciones</b> y vuelve a AeroAviso.':'Toca el candado junto a la dirección de la página → Notificaciones → Permitir, y recarga. En Windows revisa también Configuración → Sistema → Notificaciones.')+'</p>';
+  if (N().lastErr) h += '<p class="pstat bad-text" style="margin-top:10px">'+esc(N().lastErr)+'</p>';
+  if (!NATIVE && isAndroidUA && /^https:/.test(APK_URL)) h += '<a class="stepbtn" style="margin-top:12px" href="'+esc(APK_URL)+'"><span class="num">↓</span><span><b>Descargar AeroAviso para Android</b><small>Para recibir los avisos con la app cerrada, instala la app.</small></span></a>';
+  if (NATIVE) h += '<p class="hint" style="margin:10px 0 0">Si no te llegan con la pantalla apagada: Ajustes → Aplicaciones → AeroAviso → Batería → <b>Sin restricciones</b>.</p>';
+  h += '<p class="hint" style="margin:6px 0 0">Las alertas de ejemplo no generan notificaciones.</p>';
+  el.innerHTML = h;
+}
+
+document.addEventListener("change", e=>{
+  if (e.target.id !== "notifSw") return;
+  if (e.target.checked) enableNotif(); else disableNotif();
+});
+document.addEventListener("click", async e=>{
+  const t = e.target.closest ? e.target.closest("button,a") : null; if (!t) return;
+  if (t.id==="openSet") openNotifSettings();
+  else if (t.id==="exactBtn"){ try{ exactState = (await LN.changeExactNotificationSetting()).exact_alarm; }catch(err){} renderPhone(); }
+  else if (t.id==="test1" || t.dataset.test1!==undefined) test1min();
+  else if (t.dataset.enable!==undefined) enableNotif();
+  else if (t.dataset.openset!==undefined) openNotifSettings();
+  else if (t.id==="installPwa" && installEvt){ installEvt.prompt(); installEvt = null; renderPhone(); }
+});
+document.addEventListener("click", e=>{
+  const c = e.target.closest ? e.target.closest("[data-in]") : null; if (!c) return;
+  const v = c.dataset.in; let t;
+  if (v==="tomorrow"){ const d=new Date(); d.setDate(d.getDate()+1); d.setHours(8,0,0,0); t=d.getTime(); }
+  else t = Date.now() + (+v)*MIN + 30000;
+  $("#fDue").value = toLocalInput(t);
+  if (v==="5" || v==="15") $("#fLead").value = "2";
+});
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible") refreshPerm().then(()=>{ if (phoneOn()) syncAllPhone(); }); });
+
+/* ---------- acciones ---------- */
+function complete(id){
+  const a = state.alerts.find(x=>x.id===id); if(!a) return;
+  const now = Date.now();
+  if (a.rep && a.rep!=="none"){
+    let d = nextDue(a.due, a.rep);
+    while (d <= now) d = nextDue(d, a.rep);
+    addLog("Cumplida: "+a.title, "Próximo vencimiento: "+fmtFull(d)+".", "ok");
+    phoneCancelAll(a); a.due = d; a.n = {pre:false,due:false,last:0}; a.snooze = 0; syncPhone(a);
+  } else {
+    phoneCancelAll(a);
+    if (now >= a.due) phoneResolved(a);
+    a.done = true; a.doneAt = now;
+    if (a.kind==="report") addLog("Resuelto: "+a.title, "Se resolvió "+fmtDur(now-a.due)+" después del reporte.", "ok");
+    else addLog((a.kind==="timer"?"Apagado registrado: ":"Cumplida: ")+a.title, (now>a.due ? "Con "+fmtDur(now-a.due)+" de retraso." : "A tiempo, "+fmtDur(a.due-now)+" antes del límite."), now>a.due?"soon":"ok");
+  }
+  save(); renderAll();
+  toast(a.kind==="timer" ? "Apagado registrado" : a.kind==="report" ? "Marcado como resuelto" : "Marcada como cumplida", a.title, "ok");
+}
+function snooze(id){
+  const a = state.alerts.find(x=>x.id===id); if(!a) return;
+  a.snooze = Date.now() + HOUR; a.n.last = Date.now(); syncPhone(a);
+  addLog("Pospuesta 1 hora: "+a.title, "El siguiente recordatorio será a las "+fmtTime(a.snooze)+".", "soon");
+  save(); renderAll();
+}
+function extend(id, mins){
+  const a = state.alerts.find(x=>x.id===id); if(!a) return;
+  a.due = Math.max(a.due, Date.now()) + mins*MIN; a.n = {pre:false,due:false,last:0}; syncPhone(a);
+  addLog("Tiempo extendido: "+a.title, "Nueva hora de apagado: "+fmtTime(a.due)+".", "soon");
+  save(); renderAll();
+}
+let pendingDelete = null;
+function remove(id){
+  if (pendingDelete !== id){ pendingDelete = id; renderAll(); return; }
+  const gone = state.alerts.find(x=>x.id===id); if (gone) phoneCancelAll(gone);
+  state.alerts = state.alerts.filter(x=>x.id!==id); pendingDelete = null;
+  save(); renderAll();
+}
+let calOpen = null;
+
+function gcalUrl(a){
+  const f = t => new Date(t).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");
+  const end = a.due + 30*MIN;
+  const details = [a.notes, a.who && "Responsable: "+a.who, a.amount && "Monto: "+money(a), "Creado con AeroAviso"].filter(Boolean).join("\n");
+  const rr = {daily:"DAILY",weekly:"WEEKLY",monthly:"MONTHLY",yearly:"YEARLY"}[a.rep];
+  let u = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(a.title)+"&dates="+f(a.due)+"/"+f(end)+"&details="+encodeURIComponent(details);
+  if (rr) u += "&recur="+encodeURIComponent("RRULE:FREQ="+rr);
+  return u;
+}
+function icsFor(a){
+  const f = t => new Date(t).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");
+  const escI = s => String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+  const rr = {daily:"DAILY",weekly:"WEEKLY",monthly:"MONTHLY",yearly:"YEARLY"}[a.rep];
+  const desc = [a.notes, a.who && "Responsable: "+a.who, a.amount && "Monto: "+money(a)].filter(Boolean).join("\n");
+  const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//AeroAviso//ES","CALSCALE:GREGORIAN","BEGIN:VEVENT",
+    "UID:"+a.id+"@aeroaviso","DTSTAMP:"+f(Date.now()),"DTSTART:"+f(a.due),"DTEND:"+f(a.due+30*MIN),
+    "SUMMARY:"+escI(a.title),"DESCRIPTION:"+escI(desc)];
+  if (rr) lines.push("RRULE:FREQ="+rr);
+  lines.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+escI("Por vencer: "+a.title),"TRIGGER:-PT"+a.lead+"M","END:VALARM");
+  lines.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+escI("VENCIDA: "+a.title),"TRIGGER:PT0M","END:VALARM");
+  lines.push("END:VEVENT","END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function download(name, text, type){
+  try{
+    const blob = new Blob([text],{type});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = name; document.body.appendChild(link); link.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); link.remove(); }, 1500);
+  }catch(e){ toast("No se pudo descargar", "Tu navegador bloqueó la descarga.", "over"); }
+}
+
+/* ---------- render ---------- */
+let filter = "todas";
+function renderFilters(){
+  const counts = {};
+  state.alerts.forEach(a=>{ if(!a.done) counts[a.cat]=(counts[a.cat]||0)+1; });
+  const items = [["todas","Todas"],["vencidas","Solo vencidas"]].concat(Object.keys(CATS).map(k=>[k,CATS[k].n+(counts[k]?" ("+counts[k]+")":"")]) ).concat([["cumplidas","Cumplidas"]]);
+  $("#filters").innerHTML = items.map(([k,n])=>'<button class="chip" type="button" data-filter="'+k+'" aria-pressed="'+(filter===k)+'">'+esc(n)+'</button>').join("");
+}
+
+function alertHTML(a, now){
+  const st = status(a, now);
+  const delta = a.due - now;
+  const cd = a.done ? (a.kind==="report"?"Resuelto ":"Cumplida ") + fmtTime(a.doneAt) : cdText(a, delta);
+  const meta = [];
+  if (a.kind==="report") meta.push("Área <b>"+esc(a.area)+"</b>", "Aviso cada <b>"+a.every+" min</b>");
+  if (a.kind==="timer") meta.push("Encendido <b>"+esc(fmtTime(a.start))+"</b>", "Apagar <b>"+esc(fmtTime(a.due))+"</b>");
+  if (a.who) meta.push("Responsable <b>"+esc(a.who)+"</b>");
+  if (a.amount) meta.push("Monto <b>"+esc(money(a))+"</b>");
+  if (a.rep && a.rep!=="none") meta.push("Se repite <b>"+({daily:"cada día",weekly:"cada semana",monthly:"cada mes",yearly:"cada año"}[a.rep])+"</b>");
+  if (!a.done && a.kind!=="report") meta.push("Aviso <b>"+esc(leadText(a.lead))+"</b>");
+  if (a.snooze > now && st==="over") meta.push("Pospuesta hasta <b>"+esc(fmtTime(a.snooze))+"</b>");
+  let actions = "";
+  if (!a.done){
+    actions += '<button class="btn good" data-act="done" data-id="'+a.id+'">'+(a.kind==="timer"?"Registrar apagado":a.kind==="report"?"Marcar resuelto":"Marcar cumplida")+'</button>';
+    if (a.kind==="timer") actions += '<button class="btn" data-act="ext" data-id="'+a.id+'">+15 min</button>';
+    if (st==="over") actions += '<button class="btn" data-act="snooze" data-id="'+a.id+'">Posponer aviso 1 h</button>';
+    if (a.kind==="deadline") actions += '<button class="btn" data-act="cal" data-id="'+a.id+'" aria-expanded="'+(calOpen===a.id)+'">Calendario</button>';
+  }
+  actions += '<button class="btn danger" data-act="del" data-id="'+a.id+'">'+(pendingDelete===a.id?"¿Seguro? Toca otra vez para eliminar":"Eliminar")+'</button>';
+  let cal = "";
+  if (calOpen===a.id){
+    cal = '<div class="cal-box"><p>Crea el evento en el calendario del celular. Así la alarma suena aunque cierres AeroAviso.</p><div>'+
+      '<a class="btn primary" href="'+esc(gcalUrl(a))+'" target="_blank" rel="noopener">Google Calendar (Android)</a>'+
+      '<button class="btn" data-act="ics" data-id="'+a.id+'">Archivo .ics (iPhone / Outlook)</button></div></div>';
+  }
+  return '<article class="alert '+st+'">'+
+    '<div class="a-main"><div class="a-top"><span class="badge">'+(a.kind==="report" && !a.done ? esc(a.rtype) : a.kind==="report" ? "Resuelto" : LABEL[st])+'</span><span class="cat">'+esc((CATS[a.cat]||{}).n||a.cat)+'</span>'+(a.sample?'<span class="sample">Ejemplo</span>':'')+'</div>'+
+    '<h3 class="a-title">'+esc(a.title)+'</h3>'+
+    '<div class="a-meta">'+meta.map(m=>"<span>"+m+"</span>").join("")+'</div>'+
+    (a.notes?'<div class="a-notes">'+esc(a.notes)+'</div>':'')+'</div>'+
+    '<div class="a-side"><div class="cd" data-cd="'+a.id+'">'+cd+'</div><div class="due">'+esc(fmtFull(a.due))+'</div></div>'+
+    '<div class="a-actions">'+actions+'</div>'+cal+'</article>';
+}
+
+const ORDER = {over:0, soon:1, ok:2, done:3};
+function sorted(list, now){ return list.slice().sort((a,b)=> ORDER[status(a,now)]-ORDER[status(b,now)] || (a.done ? b.doneAt-a.doneAt : a.due-b.due)); }
+
+function renderList(){
+  const now = Date.now();
+  let items = state.alerts;
+  if (filter==="vencidas") items = items.filter(a=>status(a,now)==="over");
+  else if (filter==="cumplidas") items = items.filter(a=>a.done);
+  else if (filter!=="todas") items = items.filter(a=>a.cat===filter && !a.done);
+  else items = items.filter(a=>!a.done);
+  $("#list").innerHTML = items.length ? sorted(items,now).map(a=>alertHTML(a,now)).join("") :
+    '<div class="empty">No hay alertas aquí. Crea una en <b>+ Nueva alerta</b>.</div>';
+  const eq = state.alerts.filter(a=>a.kind==="timer" && !a.done);
+  $("#eqList").innerHTML = eq.length ? sorted(eq,now).map(a=>alertHTML(a,now)).join("") :
+    '<div class="empty">Ningún equipo registrado como encendido.</div>';
+}
+
+function renderSummary(){
+  const now = Date.now(); let o=0,s=0,k=0;
+  state.alerts.forEach(a=>{ const st=status(a,now); if(st==="over")o++; else if(st==="soon")s++; else if(st==="ok")k++; });
+  $("#nOver").textContent=o; $("#nSoon").textContent=s; $("#nOk").textContent=k;
+  document.title = (o ? "("+o+") " : "") + "AeroAviso";
+}
+
+function renderLog(){
+  $("#log").innerHTML = state.log.length ? state.log.map(l=>{
+    const c = l.lvl==="over"?"var(--over)":l.lvl==="soon"?"var(--soon)":"var(--ok)";
+    return '<div class="log-item"><time>'+esc(new Date(l.t).toLocaleDateString("es-DO",{day:"2-digit",month:"2-digit"})+" "+fmtTime(l.t))+'</time><b><span class="dot" style="--c:'+c+'"></span>'+esc(l.title)+'</b><p>'+esc(l.body)+'</p></div>';
+  }).join("") : '<div class="empty">Todavía no hay avisos.</div>';
+}
+
+function renderPerm(){
+  const el = $("#perm");
+  el.className = "perm";
+  if (!N().on){
+    el.innerHTML = '<div class="perm-text"><strong>Activa las notificaciones</strong><p>'+(NATIVE?'El teléfono te pedirá permiso. Así te llegan las alertas cuando algo venza, falte o esté mal, aunque AeroAviso esté cerrada.':'El navegador te pedirá permiso. Así te llegan las alertas cuando algo venza, falte o esté mal.')+'</p></div><button class="btn primary big" type="button" data-enable>Activar notificaciones</button>';
+  } else if (permState!=="granted"){
+    el.classList.add("bad");
+    el.innerHTML = '<div class="perm-text"><strong>El permiso de notificaciones está apagado</strong><p>'+(NATIVE?'Abre los ajustes, activa <b>Permitir notificaciones</b> y vuelve a AeroAviso.':'Toca el candado junto a la dirección → Notificaciones → Permitir, y recarga la página.')+'</p></div>'+(NATIVE?'<button class="btn primary big" type="button" data-openset>Abrir ajustes</button>':'<button class="btn primary big" type="button" data-enable>Volver a pedir permiso</button>');
+  } else {
+    el.classList.add("ok");
+    el.innerHTML = '<div class="perm-text"><strong class="ok-text">Notificaciones activadas</strong><p>Te aviso antes de vencer, al vencer y cada '+state.settings.every+' min mientras siga pendiente'+(NATIVE?', aunque la app esté cerrada.':'.')+'</p></div><button class="btn" type="button" data-test1>Probar en 1 minuto</button>';
+  }
+}
+
+function renderAll(){
+  const now = Date.now();
+  lastSig = state.alerts.map(a=>a.id+status(a,now)).join();
+  renderSummary(); renderFilters(); renderList(); renderLog(); renderPerm(); renderPhone();
+}
+
+function cdText(a, delta){
+  if (a.kind==="report") return "Sin resolver hace " + fmtDur(delta);
+  return delta >= 0 ? (a.kind==="timer"?"Apagar en ":"Vence en ") + fmtDur(delta) : "Vencida hace " + fmtDur(delta);
+}
+function tickCountdowns(){
+  const now = Date.now(), d = new Date(now);
+  $("#clkLocal").textContent = d.toLocaleTimeString("es-DO",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+  $("#clkUtc").textContent = pad(d.getUTCHours())+":"+pad(d.getUTCMinutes())+":"+pad(d.getUTCSeconds())+"Z";
+  document.querySelectorAll("[data-cd]").forEach(el=>{
+    const a = state.alerts.find(x=>x.id===el.dataset.cd); if(!a||a.done) return;
+    el.textContent = cdText(a, a.due - now);
+  });
+}
+
+/* ---------- eventos ---------- */
+document.querySelector("nav.tabs").addEventListener("click", e=>{
+  const b = e.target.closest("[data-tab]"); if(!b) return;
+  document.querySelectorAll("nav.tabs button").forEach(x=>x.setAttribute("aria-selected", x===b));
+  document.querySelectorAll("section.panel").forEach(s=>s.hidden = s.id !== "tab-"+b.dataset.tab);
+  if (b.dataset.tab==="nueva" && !$("#fDue").value) $("#fDue").value = toLocalInput(Date.now()+HOUR);
+});
+function goTab(t){ document.querySelector('[data-tab="'+t+'"]').click(); }
+
+$("#filters").addEventListener("click", e=>{ const b=e.target.closest("[data-filter]"); if(!b) return; filter=b.dataset.filter; renderFilters(); renderList(); });
+
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-act]");
+  if (!b){ if(pendingDelete && !e.target.closest("[data-act]")){ pendingDelete=null; renderList(); } return; }
+  const id = b.dataset.id, act = b.dataset.act;
+  if (act!=="del") pendingDelete = null;
+  if (act==="done") complete(id);
+  else if (act==="snooze") snooze(id);
+  else if (act==="ext") extend(id, 15);
+  else if (act==="del") remove(id);
+  else if (act==="cal"){ calOpen = calOpen===id ? null : id; renderList(); }
+  else if (act==="ics"){ const a=state.alerts.find(x=>x.id===id); if(a) download("aeroaviso-"+a.title.slice(0,30).replace(/[^\w\-]+/g,"_")+".ics", icsFor(a), "text/calendar"); }
+});
+
+$("#perm").addEventListener("click", async e=>{
+  const b = e.target.closest("[data-perm]"); if(!b) return;
+  if (b.dataset.perm==="ask"){
+    try{
+      const r = await Notification.requestPermission();
+      if (r==="granted"){
+        renderPerm();
+        const ok = await sysNotify("AeroAviso activado", "Así te llegarán los avisos de vencimiento.", "aeroaviso-test", false);
+        addLog("Notificaciones activadas", ok ? "Permiso concedido en este dispositivo." : "Permiso concedido, pero el sistema no mostró el aviso.", ok?"ok":"soon");
+        save(); renderLog();
+      } else renderPerm();
+    }catch(err){ renderPerm(); }
+  } else if (b.dataset.perm==="test"){ sendTest(); }
+});
+function sendTest(){ notify("Prueba: Pago de tasa vencido", "Así se verá un aviso cuando algo no se haga a tiempo.", "over", "aeroaviso-test"); }
+$("#testBtn").addEventListener("click", sendTest);
+
+/* plantillas */
+$("#fCat").innerHTML = Object.keys(CATS).filter(k=>k!=="equipos").map(k=>'<option value="'+k+'">'+esc(CATS[k].n)+'</option>').join("");
+$("#tpl").innerHTML = '<span class="hint" style="align-self:center">Rápidas:</span>' + TEMPLATES.map((t,i)=>'<button type="button" class="chip" data-tpl="'+i+'">'+esc(t.t)+'</button>').join("");
+$("#tpl").addEventListener("click", e=>{
+  const b=e.target.closest("[data-tpl]"); if(!b) return; const t=TEMPLATES[+b.dataset.tpl];
+  $("#fTitle").value=t.t; $("#fCat").value=t.c; $("#fLead").value=String(t.lead); $("#fRep").value=t.rep; $("#fWho").value=t.who||""; $("#fNotes").value=t.notes||"";
+  $("#fTitle").focus();
+});
+
+$("#formNew").addEventListener("submit", e=>{
+  e.preventDefault();
+  const due = new Date($("#fDue").value).getTime();
+  if (!due || isNaN(due)){ $("#formMsg").textContent="Pon una fecha y hora válidas."; return; }
+  const a = newAlert({title:$("#fTitle").value.trim(), cat:$("#fCat").value, who:$("#fWho").value.trim(), due,
+    lead:+$("#fLead").value, rep:$("#fRep").value, amount:$("#fAmt").value, currency:$("#fCur").value, notes:$("#fNotes").value.trim()});
+  if (!a.title){ $("#formMsg").textContent="Escribe qué hay que hacer."; return; }
+  if (due - Date.now() < a.lead*MIN) a.n.pre = due <= Date.now();
+  state.alerts.push(a); syncPhone(a);
+  addLog("Alerta creada: "+a.title, "Vence "+fmtFull(a.due)+". Aviso "+leadText(a.lead)+".", "ok");
+  save();
+  e.target.reset(); $("#fDue").value = toLocalInput(Date.now()+HOUR); $("#formMsg").textContent="";
+  filter="todas"; goTab("alertas"); renderAll(); check();
+  toast("Alerta guardada", a.title, "ok");
+});
+
+/* reportar problema */
+$("#rTpl").innerHTML = '<span class="hint" style="align-self:center">Comunes:</span>' + REP_TPL.map((t,i)=>'<button type="button" class="chip" data-rtpl="'+i+'">'+esc(t[2])+'</button>').join("");
+$("#rTpl").addEventListener("click", e=>{
+  const b=e.target.closest("[data-rtpl]"); if(!b) return; const t=REP_TPL[+b.dataset.rtpl];
+  $("#rType").value=t[0]; $("#rArea").value=t[1]; $("#rWhat").value=t[2]; $("#rWhat").focus();
+});
+$("#formRep").addEventListener("submit", e=>{
+  e.preventDefault();
+  const what = $("#rWhat").value.trim(); if(!what) return;
+  const now = Date.now();
+  const a = newAlert({kind:"report", cat:"reportes", rtype:$("#rType").value, area:$("#rArea").value, title:what,
+    who:$("#rWho").value.trim(), notes:$("#rNotes").value.trim(), every:+$("#rUrg").value, due:now, lead:0});
+  state.alerts.push(a);
+  save(); e.target.reset(); $("#rUrg").value="30";
+  filter="todas"; goTab("alertas"); check(); syncPhone(a); save(); renderAll();
+});
+
+$("#eEq").addEventListener("change", ()=>{ const m = +$("#eEq").value.split("|")[1]; $("#eH").value=Math.floor(m/60); $("#eM").value=m%60; });
+$("#formEq").addEventListener("submit", e=>{
+  e.preventDefault();
+  const [name] = $("#eEq").value.split("|");
+  const mins = (+$("#eH").value||0)*60 + (+$("#eM").value||0);
+  if (mins<=0){ toast("Falta el tiempo","Pon cuántas horas o minutos puede estar encendido.","soon"); return; }
+  const now = Date.now(), pos = $("#ePos").value.trim();
+  const a = newAlert({kind:"timer", cat:"equipos", title:name+(pos?" — "+pos:""), who:$("#eWho").value.trim(), start:now, due:now+mins*MIN, lead:Math.min(10, Math.max(1,Math.floor(mins/4)))});
+  state.alerts.push(a); syncPhone(a);
+  addLog("Encendido registrado: "+a.title, "Encendido "+fmtTime(now)+". Hora sugerida de apagado "+fmtTime(a.due)+".", "ok");
+  save(); renderAll();
+  toast("Encendido registrado", "Apagar a las "+fmtTime(a.due), "ok");
+  $("#ePos").value="";
+});
+
+/* ajustes */
+$("#sEvery").value = String(state.settings.every);
+$("#sSound").checked = !!state.settings.sound;
+$("#sWake").checked = !!state.settings.wake;
+$("#sEvery").addEventListener("change", ()=>{ state.settings.every=+$("#sEvery").value; save(); renderPerm(); });
+$("#sSound").addEventListener("change", ()=>{ state.settings.sound=$("#sSound").checked; save(); });
+let wakeLock = null;
+async function applyWake(){
+  try{
+    if (state.settings.wake && "wakeLock" in navigator && document.visibilityState==="visible"){ wakeLock = await navigator.wakeLock.request("screen"); }
+    else if (wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+$("#sWake").addEventListener("change", ()=>{ state.settings.wake=$("#sWake").checked; save(); applyWake(); });
+document.addEventListener("visibilitychange", ()=>{ applyWake(); if(document.visibilityState==="visible") check(); });
+
+let delArm = false;
+$("#delSamples").addEventListener("click", e=>{
+  if (!delArm){ delArm=true; e.target.textContent="¿Seguro? Toca otra vez"; setTimeout(()=>{delArm=false; e.target.textContent="Borrar alertas de ejemplo";},4000); return; }
+  state.alerts.filter(a=>a.sample).forEach(phoneCancelAll);
+  state.alerts = state.alerts.filter(a=>!a.sample); delArm=false; e.target.textContent="Borrar alertas de ejemplo";
+  save(); renderAll(); toast("Ejemplos borrados","Ya puedes crear tus propias alertas.","ok");
+});
+let clrArm = false;
+$("#clearLog").addEventListener("click", e=>{
+  if (!clrArm){ clrArm=true; e.target.textContent="¿Seguro? Toca otra vez"; setTimeout(()=>{clrArm=false; e.target.textContent="Vaciar historial";},4000); return; }
+  state.log=[]; clrArm=false; e.target.textContent="Vaciar historial"; save(); renderLog();
+});
+$("#expBtn").addEventListener("click", ()=> download("aeroaviso-respaldo-"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(state,null,2), "application/json"));
+$("#impFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{ const s=JSON.parse(r.result); if(!Array.isArray(s.alerts)) throw 0; state=s; state.settings=Object.assign({every:30,sound:true,wake:false},s.settings||{}); state.log=s.log||[]; save(); renderAll(); toast("Respaldo cargado", state.alerts.length+" alertas.", "ok"); }catch(err){ toast("Archivo no válido","Elige un respaldo descargado desde AeroAviso.","over"); } };
+  r.readAsText(f); e.target.value="";
+});
+
+/* si la app está publicada en una web junto a sw.js, se usa para notificaciones en Android */
+try{ if ("serviceWorker" in navigator && window.isSecureContext && location.protocol!=="file:") navigator.serviceWorker.register("sw.js").catch(()=>{}); }catch(e){}
+
+/* arranque */
+$("#fDue").value = toLocalInput(Date.now()+HOUR);
+renderAll(); tickCountdowns();
+setInterval(tickCountdowns, 1000);
+setInterval(check, 10000);
+setInterval(syncAllPhone, 30*MIN);
+refreshPerm().then(()=>{ if (phoneOn()) syncAllPhone(); });
+setTimeout(check, 1500);
+applyWake();
+})();
+</script>
+</body>
+</html>

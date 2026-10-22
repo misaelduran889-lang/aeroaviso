@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AeroAviso</string>
+    <string name="title_activity_main">AeroAviso</string>
+    <string name="package_name">com.aeroaviso.app</string>
+    <string name="custom_url_scheme">com.aeroaviso.app</string>
+</resources>
